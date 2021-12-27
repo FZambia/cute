@@ -7,7 +7,7 @@ import (
 
 // Queue is a generic unbounded queue of any T.
 // It can optionally maintain the total cost of currently queued elements.
-// All queue methods are goroutine-safe. When using cost ve aware that integer overflow
+// All queue methods are goroutine-safe. When using cost be aware that integer overflow
 // is not handled here, supposing that the queue will be closed well below max int size.
 type Queue[T any] struct {
 	mu      sync.RWMutex
@@ -16,7 +16,7 @@ type Queue[T any] struct {
 	head    int
 	tail    int
 	cnt     int
-	size    int
+	cost    int
 	closed  bool
 	initCap int
 }
@@ -72,7 +72,7 @@ func (q *Queue[T]) Add(elem T, cost int) bool {
 	}
 	q.nodes[q.tail] = i
 	q.tail = (q.tail + 1) % len(q.nodes)
-	q.size += cost
+	q.cost += cost
 	q.cnt++
 	q.cond.Signal()
 	q.mu.Unlock()
@@ -86,7 +86,7 @@ func (q *Queue[T]) Close() {
 	q.closed = true
 	q.cnt = 0
 	q.nodes = nil
-	q.size = 0
+	q.cost = 0
 	q.cond.Broadcast()
 }
 
@@ -108,7 +108,7 @@ func (q *Queue[T]) CloseRemaining() []T {
 	q.closed = true
 	q.cnt = 0
 	q.nodes = nil
-	q.size = 0
+	q.cost = 0
 	q.cond.Broadcast()
 	return rem
 }
@@ -155,7 +155,7 @@ func (q *Queue[T]) Remove() (T, bool) {
 	i := q.nodes[q.head]
 	q.head = (q.head + 1) % len(q.nodes)
 	q.cnt--
-	q.size -= i.cost
+	q.cost -= i.cost
 
 	if n := len(q.nodes) / 2; n >= q.initCap && q.cnt <= n {
 		q.resize(n)
@@ -176,7 +176,7 @@ func (q *Queue[T]) Len() int {
 // Cost returns the current total cost of the queue.
 func (q *Queue[T]) Cost() int {
 	q.mu.RLock()
-	s := q.size
+	s := q.cost
 	q.mu.RUnlock()
 	return s
 }

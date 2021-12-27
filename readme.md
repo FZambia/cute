@@ -3,7 +3,7 @@
 
 Package queue provides a generic unbounded queue for Go programming language.
 
-This queue implementation can optionally maintain the total cost of items in the queue, so you can take decisions based on the current max queue total cost.
+This queue implementation also maintains the total cost of items in the queue, so you can take decisions based on the current queue total cost before adding element to the queue.
 
 All methods are goroutine-safe.
 
