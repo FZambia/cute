@@ -5,6 +5,8 @@ Package queue provides a generic unbounded queue for Go programming language.
 
 This queue implementation also maintains the total cost of items in the queue, so you can take decisions based on the current queue total cost before adding element to the queue.
 
+One possible usage scenario could be when you need to maintain a mailbox for some client, but don't want to use a buffered channel for it since the size of the buffer is hard to estimate. It should be small most of the time but still survive occasional spikes in load. This queue package may help then.
+
 All methods are goroutine-safe.
 
 Requires Go >= 1.18.
