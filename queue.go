@@ -9,9 +9,10 @@ type queuedItem[T any] struct {
 	cost int
 }
 
-// Queue is an unbounded queue of T.
-// The queue is goroutine safe.
-// Inspired by http://blog.dubbelboer.com/2015/04/25/go-faster-queue.html (MIT)
+// Queue is a generic unbounded queue of any T.
+// It can optionally maintain the total cost of currently queued elements.
+// The queue is goroutine-safe. When using cost integer overflows not handled
+// here, we suppose that the queue will be closed well below max int size.
 type Queue[T any] struct {
 	mu      sync.RWMutex
 	cond    *sync.Cond

@@ -37,7 +37,7 @@ func TestQueueLen(t *testing.T) {
 	require.Equal(t, 1, q.Len())
 }
 
-func TestQueueSize(t *testing.T) {
+func TestQueueCost(t *testing.T) {
 	q := New[string]()
 	i := "12345"
 	require.Equal(t, 0, q.Cost())
@@ -153,7 +153,7 @@ func BenchmarkQueueAddConsume(b *testing.B) {
 	q := New[[]byte]()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		addAndConsume(q, []byte("test"), 4, 10000)
+		addAndConsume(q, []byte("test"), 4, 100)
 		require.Equal(b, 0, q.Cost())
 	}
 	b.StopTimer()
