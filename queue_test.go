@@ -1,88 +1,95 @@
 package queue
 
 import (
-	"strconv"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 )
 
-type raw []byte
-
-func (i raw) Size() int {
-	return len(i)
-}
-
-func TestByteQueueResize(t *testing.T) {
-	q := New[raw]()
+func TestQueueResize(t *testing.T) {
+	q := New[string]()
 	require.Equal(t, 0, q.Len())
 	require.Equal(t, false, q.Closed())
 
 	for i := 0; i < initialCapacity; i++ {
-		q.Add(raw(strconv.Itoa(i)))
+		q.Add("1", 0)
 	}
-	q.Add(raw("resize here"))
+	q.Add("resize here", 0)
 	require.Equal(t, initialCapacity*2, cap(q.nodes))
 	q.Remove()
 
-	q.Add(raw("new resize here"))
+	q.Add("new resize here", 0)
 	require.Equal(t, initialCapacity*2, cap(q.nodes))
-	q.Add(raw("one more item, no resize must happen"))
+	q.Add("one more elem, no resize must happen", 0)
 	require.Equal(t, initialCapacity*2, cap(q.nodes))
 
 	require.Equal(t, initialCapacity+2, q.Len())
 }
 
-func TestByteQueueSize(t *testing.T) {
-	q := New[raw]()
-	require.Equal(t, 0, q.Size())
-	q.Add(raw("1"))
-	q.Add(raw("2"))
-	require.Equal(t, 2, q.Size())
+func TestQueueLen(t *testing.T) {
+	q := New[string]()
+	i := "12345"
+	require.Equal(t, 0, q.Len())
+	q.Add(i, len(i))
+	q.Add(i, len(i))
+	require.Equal(t, 2, q.Len())
 	q.Remove()
-	require.Equal(t, 1, q.Size())
+	require.Equal(t, 1, q.Len())
 }
 
-func TestByteQueueWait(t *testing.T) {
-	q := New[raw]()
-	q.Add(raw("1"))
-	q.Add(raw("2"))
+func TestQueueSize(t *testing.T) {
+	q := New[string]()
+	i := "12345"
+	require.Equal(t, 0, q.Cost())
+	q.Add(i, len(i))
+	q.Add(i, len(i))
+	require.Equal(t, 10, q.Cost())
+	q.Remove()
+	require.Equal(t, 5, q.Cost())
+}
+
+func TestQueueWait(t *testing.T) {
+	q := New[string]()
+	q.Add("1", 0)
+	q.Add("2", 0)
 
 	ok := q.Wait()
 	require.Equal(t, true, ok)
 	s, ok := q.Remove()
 	require.Equal(t, true, ok)
-	require.Equal(t, "1", string(s))
+	require.Equal(t, "1", s)
 
 	ok = q.Wait()
 	require.Equal(t, true, ok)
 	s, ok = q.Remove()
 	require.Equal(t, true, ok)
-	require.Equal(t, "2", string(s))
+	require.Equal(t, "2", s)
 
 	go func() {
-		q.Add(raw("3"))
+		q.Add("3", 0)
 	}()
 
 	ok = q.Wait()
 	require.Equal(t, true, ok)
 	s, ok = q.Remove()
 	require.Equal(t, true, ok)
-	require.Equal(t, "3", string(s))
+	require.Equal(t, "3", s)
 }
 
-func TestByteQueueClose(t *testing.T) {
-	q := New[raw]()
+func TestQueueClose(t *testing.T) {
+	q := New[[]byte]()
 
 	// test removing from empty queue
 	_, ok := q.Remove()
 	require.Equal(t, false, ok)
 
-	q.Add(raw("1"))
-	q.Add(raw("2"))
+	i := []byte("1")
+
+	q.Add(i, 0)
+	q.Add(i, 0)
 	q.Close()
 
-	ok = q.Add(raw("3"))
+	ok = q.Add(i, 0)
 	require.Equal(t, false, ok)
 
 	ok = q.Wait()
@@ -94,13 +101,13 @@ func TestByteQueueClose(t *testing.T) {
 	require.Equal(t, true, q.Closed())
 }
 
-func TestByteQueueCloseRemaining(t *testing.T) {
-	q := New[raw]()
-	q.Add(raw("1"))
-	q.Add(raw("2"))
+func TestQueueCloseRemaining(t *testing.T) {
+	q := New[string]()
+	q.Add("1", 0)
+	q.Add("2", 0)
 	remaining := q.CloseRemaining()
 	require.Equal(t, 2, len(remaining))
-	ok := q.Add(raw("3"))
+	ok := q.Add("3", 0)
 	require.Equal(t, false, ok)
 	require.Equal(t, true, q.Closed())
 	remaining = q.CloseRemaining()
@@ -108,16 +115,17 @@ func TestByteQueueCloseRemaining(t *testing.T) {
 }
 
 func BenchmarkQueueAdd(b *testing.B) {
-	q := New[raw]()
+	q := New[[]byte]()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		q.Add(raw("test"))
+		i := []byte("test")
+		q.Add(i, len(i))
 	}
 	b.StopTimer()
 	q.Close()
 }
 
-func addAndConsume[T Sizeable](q *Queue[T], item T, n int) {
+func addAndConsume[T any](q *Queue[T], item T, cost int, n int) {
 	// Add to queue and consume in another goroutine.
 	done := make(chan struct{})
 	go func() {
@@ -136,17 +144,17 @@ func addAndConsume[T Sizeable](q *Queue[T], item T, n int) {
 		}
 	}()
 	for i := 0; i < n; i++ {
-		q.Add(item)
+		q.Add(item, cost)
 	}
 	<-done
 }
 
 func BenchmarkQueueAddConsume(b *testing.B) {
-	q := New[raw]()
-	item := raw("test")
+	q := New[[]byte]()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		addAndConsume(q, item, 100)
+		addAndConsume(q, []byte("test"), 4, 10000)
+		require.Equal(b, 0, q.Cost())
 	}
 	b.StopTimer()
 	q.Close()

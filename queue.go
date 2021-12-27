@@ -4,17 +4,18 @@ import (
 	"sync"
 )
 
-type Sizeable interface {
-	Size() int
+type queuedItem[T any] struct {
+	elem T
+	cost int
 }
 
 // Queue is an unbounded queue of T.
 // The queue is goroutine safe.
 // Inspired by http://blog.dubbelboer.com/2015/04/25/go-faster-queue.html (MIT)
-type Queue[T Sizeable] struct {
+type Queue[T any] struct {
 	mu      sync.RWMutex
 	cond    *sync.Cond
-	nodes   []T
+	nodes   []queuedItem[T]
 	head    int
 	tail    int
 	cnt     int
@@ -26,19 +27,18 @@ type Queue[T Sizeable] struct {
 const initialCapacity = 2
 
 // New ByteQueue returns a new T queue with initial capacity.
-func New[T Sizeable]() *Queue[T] {
+func New[T any]() *Queue[T] {
 	sq := &Queue[T]{
 		initCap: initialCapacity,
-		nodes:   make([]T, initialCapacity),
+		nodes:   make([]queuedItem[T], initialCapacity),
 	}
 	sq.cond = sync.NewCond(&sq.mu)
 	return sq
 }
 
-// Add a T to the back of the queue
-// will return false if the queue is closed.
-// In that case the T is dropped.
-func (q *Queue[T]) Add(i T) bool {
+// Add a T to the back of the queue.
+// It will return false if the queue is closed. In that case the T is dropped.
+func (q *Queue[T]) Add(elem T, cost int) bool {
 	q.mu.Lock()
 	if q.closed {
 		q.mu.Unlock()
@@ -49,17 +49,20 @@ func (q *Queue[T]) Add(i T) bool {
 		// In Go this resulted in a higher memory usage.
 		q.resize(q.cnt * 2)
 	}
+	i := queuedItem[T]{
+		elem: elem,
+		cost: cost,
+	}
 	q.nodes[q.tail] = i
 	q.tail = (q.tail + 1) % len(q.nodes)
-	q.size += i.Size()
+	q.size += cost
 	q.cnt++
 	q.cond.Signal()
 	q.mu.Unlock()
 	return true
 }
 
-// Close the queue and discard all entries in the queue
-// all goroutines in wait() will return
+// Close the queue and discard all entries in the queue. All goroutines in wait() will return.
 func (q *Queue[T]) Close() {
 	q.mu.Lock()
 	defer q.mu.Unlock()
@@ -83,7 +86,7 @@ func (q *Queue[T]) CloseRemaining() []T {
 		i := q.nodes[q.head]
 		q.head = (q.head + 1) % len(q.nodes)
 		q.cnt--
-		rem = append(rem, i)
+		rem = append(rem, i.elem)
 	}
 	q.closed = true
 	q.cnt = 0
@@ -135,14 +138,14 @@ func (q *Queue[T]) Remove() (T, bool) {
 	i := q.nodes[q.head]
 	q.head = (q.head + 1) % len(q.nodes)
 	q.cnt--
-	q.size -= i.Size()
+	q.size -= i.cost
 
 	if n := len(q.nodes) / 2; n >= q.initCap && q.cnt <= n {
 		q.resize(n)
 	}
 
 	q.mu.Unlock()
-	return i, true
+	return i.elem, true
 }
 
 // Len returns the current length of the queue.
@@ -153,17 +156,17 @@ func (q *Queue[T]) Len() int {
 	return l
 }
 
-// Size returns the current size of the queue.
-func (q *Queue[T]) Size() int {
+// Cost returns the current total cost of the queue.
+func (q *Queue[T]) Cost() int {
 	q.mu.RLock()
 	s := q.size
 	q.mu.RUnlock()
 	return s
 }
 
-// Write must be held when calling.
+// Write mutex must be held when calling.
 func (q *Queue[T]) resize(n int) {
-	nodes := make([]T, n)
+	nodes := make([]queuedItem[T], n)
 	if q.head < q.tail {
 		copy(nodes, q.nodes[q.head:q.tail])
 	} else {
