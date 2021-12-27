@@ -1,18 +1,14 @@
+// Package queue provides a generic unbounded queue for Go programming language.
 package queue
 
 import (
 	"sync"
 )
 
-type queuedItem[T any] struct {
-	elem T
-	cost int
-}
-
 // Queue is a generic unbounded queue of any T.
 // It can optionally maintain the total cost of currently queued elements.
-// The queue is goroutine-safe. When using cost integer overflows not handled
-// here, we suppose that the queue will be closed well below max int size.
+// All queue methods are goroutine-safe. When using cost ve aware that integer overflow
+// is not handled here, supposing that the queue will be closed well below max int size.
 type Queue[T any] struct {
 	mu      sync.RWMutex
 	cond    *sync.Cond
@@ -25,20 +21,36 @@ type Queue[T any] struct {
 	initCap int
 }
 
-const initialCapacity = 2
+// Wrap T and keep its cost.
+type queuedItem[T any] struct {
+	elem T
+	cost int
+}
 
-// New ByteQueue returns a new T queue with initial capacity.
-func New[T any]() *Queue[T] {
+// DefaultInitialCapacity of the underlying slice to keep queued elements.
+const DefaultInitialCapacity = 1
+
+// New returns a new Queue. The caller can optionally override initial capacity
+// of the queue (which is DefaultInitialCapacity by default). Queue capacity never
+// goes down below the initial capacity.
+func New[T any](initialCapacity ...uint) *Queue[T] {
+	if len(initialCapacity) > 1 {
+		panic("too many arguments passed")
+	}
+	initCap := DefaultInitialCapacity
+	if len(initialCapacity) > 0 {
+		initCap = int(initialCapacity[0])
+	}
 	sq := &Queue[T]{
-		initCap: initialCapacity,
-		nodes:   make([]queuedItem[T], initialCapacity),
+		initCap: initCap,
+		nodes:   make([]queuedItem[T], initCap),
 	}
 	sq.cond = sync.NewCond(&sq.mu)
 	return sq
 }
 
 // Add a T to the back of the queue.
-// It will return false if the queue is closed. In that case the T is dropped.
+// It will return false if the queue is closed, in that case the T is dropped.
 func (q *Queue[T]) Add(elem T, cost int) bool {
 	q.mu.Lock()
 	if q.closed {
@@ -48,7 +60,11 @@ func (q *Queue[T]) Add(elem T, cost int) bool {
 	if q.cnt == len(q.nodes) {
 		// Also tested a growth rate of 1.5, see: http://stackoverflow.com/questions/2269063/buffer-growth-strategy
 		// In Go this resulted in a higher memory usage.
-		q.resize(q.cnt * 2)
+		n := q.cnt * 2
+		if n == 0 {
+			n = 1
+		}
+		q.resize(n)
 	}
 	i := queuedItem[T]{
 		elem: elem,
@@ -168,6 +184,14 @@ func (q *Queue[T]) Cost() int {
 // Write mutex must be held when calling.
 func (q *Queue[T]) resize(n int) {
 	nodes := make([]queuedItem[T], n)
+
+	if n == 0 {
+		q.tail = 0
+		q.head = 0
+		q.nodes = nodes
+		return
+	}
+
 	if q.head < q.tail {
 		copy(nodes, q.nodes[q.head:q.tail])
 	} else {

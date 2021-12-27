@@ -7,7 +7,8 @@ import (
 )
 
 func TestQueueResize(t *testing.T) {
-	q := New[string]()
+	initialCapacity := 2
+	q := New[string](uint(initialCapacity))
 	require.Equal(t, 0, q.Len())
 	require.Equal(t, false, q.Closed())
 
@@ -17,13 +18,43 @@ func TestQueueResize(t *testing.T) {
 	q.Add("resize here", 0)
 	require.Equal(t, initialCapacity*2, cap(q.nodes))
 	q.Remove()
-
 	q.Add("new resize here", 0)
 	require.Equal(t, initialCapacity*2, cap(q.nodes))
 	q.Add("one more elem, no resize must happen", 0)
 	require.Equal(t, initialCapacity*2, cap(q.nodes))
 
-	require.Equal(t, initialCapacity+2, q.Len())
+	q.Add("one more elem, resize must happen", 0)
+	require.Equal(t, initialCapacity*4, cap(q.nodes))
+
+	q.Remove()
+	require.Equal(t, initialCapacity*2, cap(q.nodes))
+	q.Remove()
+	require.Equal(t, initialCapacity*2, cap(q.nodes))
+	_, ok := q.Remove()
+	require.True(t, ok)
+	require.Equal(t, initialCapacity, cap(q.nodes))
+	_, ok = q.Remove()
+	require.True(t, ok)
+	require.Equal(t, initialCapacity, cap(q.nodes))
+	_, ok = q.Remove()
+	require.True(t, ok)
+	require.Equal(t, initialCapacity, cap(q.nodes))
+	_, ok = q.Remove()
+	require.False(t, ok)
+	require.Equal(t, initialCapacity, cap(q.nodes))
+}
+
+func TestQueueResizeToZero(t *testing.T) {
+	q := New[string](0)
+	require.Equal(t, 0, q.Len())
+	require.Equal(t, false, q.Closed())
+
+	q.Add("resize here", 0)
+	require.Equal(t, 1, cap(q.nodes))
+	q.Remove()
+	require.Equal(t, 0, cap(q.nodes))
+	q.Add("resize here", 0)
+	require.Equal(t, 1, cap(q.nodes))
 }
 
 func TestQueueLen(t *testing.T) {
@@ -35,6 +66,12 @@ func TestQueueLen(t *testing.T) {
 	require.Equal(t, 2, q.Len())
 	q.Remove()
 	require.Equal(t, 1, q.Len())
+}
+
+func TestQueueNew_Panics(t *testing.T) {
+	require.Panics(t, func() {
+		New[string](2, 4)
+	})
 }
 
 func TestQueueCost(t *testing.T) {
@@ -158,4 +195,15 @@ func BenchmarkQueueAddConsume(b *testing.B) {
 	}
 	b.StopTimer()
 	q.Close()
+}
+
+func BenchmarkQueueCreateAddConsumeClose(b *testing.B) {
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		q := New[[]byte](100)
+		addAndConsume(q, []byte("test"), 4, 100)
+		require.Equal(b, 0, q.Cost())
+		q.Close()
+	}
+	b.StopTimer()
 }
