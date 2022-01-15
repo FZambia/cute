@@ -64,7 +64,11 @@ func New[T any](config ...Config) *Queue[T] {
 }
 
 var (
-	ErrClosed          = errors.New("queue closed")
+	// ErrClosed means that queue has been already closed.
+	ErrClosed = errors.New("queue closed")
+	// ErrMaxCostExceeded returned on adding to the queue when Config.MaxCost is
+	// greater than zero and total cost of queued elements plus cost of new element
+	// exceeds Config.MaxCost.
 	ErrMaxCostExceeded = errors.New("max queue cost exceeded")
 )
 
