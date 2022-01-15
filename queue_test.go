@@ -1,4 +1,4 @@
-package queue
+package cute
 
 import (
 	"github.com/stretchr/testify/require"

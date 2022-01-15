@@ -1,4 +1,4 @@
-module github.com/FZambia/queue
+module github.com/FZambia/cute
 
 go 1.18
 

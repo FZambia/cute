@@ -1,5 +1,5 @@
-// Package queue provides a generic unbounded queue for Go programming language.
-package queue
+// Package cute provides a generic unbounded queue for Go programming language.
+package cute
 
 import (
 	"errors"

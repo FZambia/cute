@@ -1,7 +1,7 @@
-[![Build Status](https://github.com/FZambia/queue/workflows/build/badge.svg?branch=main)](https://github.com/FZambia/queue/actions)
-[![GoDoc](https://pkg.go.dev/badge/FZambia/queue)](https://pkg.go.dev/github.com/FZambia/queue)
+[![Build Status](https://github.com/FZambia/cute/workflows/build/badge.svg?branch=main)](https://github.com/FZambia/cute/actions)
+[![GoDoc](https://pkg.go.dev/badge/FZambia/cute)](https://pkg.go.dev/github.com/FZambia/cute)
 
-Package queue provides a fast generic unbounded queue for Go programming language.
+Package `cu[T]e` provides a fast generic unbounded queue for Go programming language.
 
 This queue implementation additionally maintains the total cost of currently queued elements, so queue can be bounded to the elements cost.
 
