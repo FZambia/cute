@@ -2,6 +2,7 @@
 package queue
 
 import (
+	"errors"
 	"sync"
 )
 
@@ -17,6 +18,7 @@ type Queue[T any] struct {
 	tail    int
 	cnt     int
 	cost    int
+	maxCost int
 	closed  bool
 	initCap int
 }
@@ -30,32 +32,72 @@ type queuedItem[T any] struct {
 // DefaultInitialCapacity of the underlying slice to keep queued elements.
 const DefaultInitialCapacity = 1
 
+// Options for queue. Use functional options to modify queue behavior.
+type Options struct {
+	initialCapacity *int
+	maxCost         int
+}
+
+// Option is a type to represent various queue options.
+type Option func(*Options)
+
+// WithInitialCapacity allows setting a capacity for the underlying slice to keep
+// queued elements (which is DefaultInitialCapacity by default). Queue capacity never
+//// goes down below the initial capacity.
+func WithInitialCapacity(capacity int) Option {
+	return func(opts *Options) {
+		opts.initialCapacity = &capacity
+	}
+}
+
+// WithMaxCost allows setting maximum queue cost. If max cost not set – then
+// queue will grow infinitely (but can be closed manually from the outside after)
+// checking Queue.Size().
+func WithMaxCost(maxCost int) Option {
+	return func(opts *Options) {
+		opts.maxCost = maxCost
+	}
+}
+
 // New returns a new Queue. The caller can optionally override initial capacity
 // of the queue (which is DefaultInitialCapacity by default). Queue capacity never
 // goes down below the initial capacity.
-func New[T any](initialCapacity ...uint) *Queue[T] {
-	if len(initialCapacity) > 1 {
-		panic("too many arguments passed")
+func New[T any](opts ...Option) *Queue[T] {
+	o := &Options{}
+	for _, opt := range opts {
+		opt(o)
 	}
 	initCap := DefaultInitialCapacity
-	if len(initialCapacity) > 0 {
-		initCap = int(initialCapacity[0])
+	if o.initialCapacity != nil {
+		initCap = *o.initialCapacity
 	}
 	sq := &Queue[T]{
 		initCap: initCap,
 		nodes:   make([]queuedItem[T], initCap),
+		maxCost: o.maxCost,
 	}
 	sq.cond = sync.NewCond(&sq.mu)
 	return sq
 }
 
+var (
+	ErrClosed          = errors.New("queue closed")
+	ErrMaxCostExceeded = errors.New("max queue cost exceeded")
+)
+
 // Add a T to the back of the queue.
-// It will return false if the queue is closed, in that case the T is dropped.
-func (q *Queue[T]) Add(elem T, cost int) bool {
+// It will return ErrClosed if the queue is closed, in that case the T is dropped.
+// It will return ErrMaxCostExceeded if the queue max cost will be overflowed upon
+// adding new elem, in that case the T is dropped.
+func (q *Queue[T]) Add(elem T, cost int) error {
 	q.mu.Lock()
 	if q.closed {
 		q.mu.Unlock()
-		return false
+		return ErrClosed
+	}
+	if q.maxCost > 0 && q.cost+cost > q.maxCost {
+		q.mu.Unlock()
+		return ErrMaxCostExceeded
 	}
 	if q.cnt == len(q.nodes) {
 		// Also tested a growth rate of 1.5, see: http://stackoverflow.com/questions/2269063/buffer-growth-strategy
@@ -76,7 +118,7 @@ func (q *Queue[T]) Add(elem T, cost int) bool {
 	q.cnt++
 	q.cond.Signal()
 	q.mu.Unlock()
-	return true
+	return nil
 }
 
 // Close the queue and discard all entries in the queue. All goroutines in wait() will return.
@@ -124,33 +166,38 @@ func (q *Queue[T]) Closed() bool {
 }
 
 // Wait for a message to be added.
-// If there are items on the queue will return immediately. Will return false
-// if the queue is closed. Otherwise, returns true.
-func (q *Queue[T]) Wait() bool {
+// If there are items on the queue will return immediately. Will return ErrClosed
+// if the queue is closed. Otherwise, returns nil.
+func (q *Queue[T]) Wait() error {
 	q.mu.Lock()
 	if q.closed {
 		q.mu.Unlock()
-		return false
+		return ErrClosed
 	}
 	if q.cnt != 0 {
 		q.mu.Unlock()
-		return true
+		return nil
 	}
 	q.cond.Wait()
 	q.mu.Unlock()
-	return true
+	return nil
 }
 
 // Remove will remove a T from the queue.
 // If false is returned, it either means:
 // 1) there were no items on the queue, or
 // 2) the queue is closed.
-func (q *Queue[T]) Remove() (T, bool) {
+func (q *Queue[T]) Remove() (T, bool, error) {
 	q.mu.Lock()
+	if q.closed {
+		q.mu.Unlock()
+		var t T
+		return t, false, ErrClosed
+	}
 	if q.cnt == 0 {
 		q.mu.Unlock()
 		var t T
-		return t, false
+		return t, false, nil
 	}
 	i := q.nodes[q.head]
 	q.head = (q.head + 1) % len(q.nodes)
@@ -162,7 +209,7 @@ func (q *Queue[T]) Remove() (T, bool) {
 	}
 
 	q.mu.Unlock()
-	return i.elem, true
+	return i.elem, true, nil
 }
 
 // Len returns the current length of the queue.
