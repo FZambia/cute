@@ -173,7 +173,7 @@ func BenchmarkQueueAdd(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		i := []byte("test")
-		q.Add(i, len(i))
+		_ = q.Add(i, len(i))
 	}
 	b.StopTimer()
 	q.Close()
@@ -198,13 +198,13 @@ func addAndConsume[T any](q *Queue[T], item T, cost int, n int) {
 		}
 	}()
 	for i := 0; i < n; i++ {
-		q.Add(item, cost)
+		_ = q.Add(item, cost)
 	}
 	<-done
 }
 
 func BenchmarkQueueAddConsume(b *testing.B) {
-	q := New[[]byte]()
+	q := New[[]byte](Config{InitialCapacity: 1})
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		addAndConsume(q, []byte("test"), 4, 100)
