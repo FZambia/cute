@@ -5,17 +5,19 @@ import "fmt"
 func ExampleQueue_Add() {
 	q := New[string]()
 	err := q.Add("1", 0)
-	fmt.Println(err)
+	if err != nil {
+		panic(err)
+	}
 	el, ok, err := q.Remove()
-	fmt.Println(err)
-	fmt.Println(el)
+	if err != nil {
+		panic(err)
+	}
 	fmt.Println(ok)
+	fmt.Println(el)
 
 	// Output:
-	// <nil>
-	// <nil>
-	// 1
 	// true
+	// 1
 }
 
 func ExampleQueue_Wait() {
@@ -24,11 +26,11 @@ func ExampleQueue_Wait() {
 	go func() {
 		err := q.Wait()
 		if err != nil {
-			return
+			panic(err)
 		}
 		if el, ok, err := q.Remove(); ok {
 			if err != nil {
-				return
+				panic(err)
 			}
 			fmt.Println(ok)
 			fmt.Println(el)
@@ -44,13 +46,16 @@ func ExampleQueue_Wait() {
 }
 
 func ExampleQueue_Cost() {
-	q := New[string](Config{MaxCost: 1})
-	err := q.Add("e1", 1)
+	q := New[string](Config{MaxCost: 10})
+	err := q.Add("e1", 4)
 	fmt.Println(err)
-	err = q.Add("e2", 1)
+	err = q.Add("e2", 6)
+	fmt.Println(err)
+	err = q.Add("e3", 1)
 	fmt.Println(err)
 
 	// Output:
+	// <nil>
 	// <nil>
 	// max queue cost exceeded
 }
