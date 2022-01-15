@@ -1,14 +1,13 @@
 package queue
 
 import (
-	"testing"
-
 	"github.com/stretchr/testify/require"
+	"testing"
 )
 
 func TestQueueResize(t *testing.T) {
 	initialCapacity := 2
-	q := New[string](uint(initialCapacity))
+	q := New[string](Config{InitialCapacity: initialCapacity})
 	require.Equal(t, 0, q.Len())
 	require.Equal(t, false, q.Closed())
 
@@ -30,22 +29,26 @@ func TestQueueResize(t *testing.T) {
 	require.Equal(t, initialCapacity*2, cap(q.nodes))
 	q.Remove()
 	require.Equal(t, initialCapacity*2, cap(q.nodes))
-	_, ok := q.Remove()
+	_, ok, err := q.Remove()
+	require.NoError(t, err)
 	require.True(t, ok)
 	require.Equal(t, initialCapacity, cap(q.nodes))
-	_, ok = q.Remove()
+	_, ok, err = q.Remove()
+	require.NoError(t, err)
 	require.True(t, ok)
 	require.Equal(t, initialCapacity, cap(q.nodes))
-	_, ok = q.Remove()
+	_, ok, err = q.Remove()
+	require.NoError(t, err)
 	require.True(t, ok)
 	require.Equal(t, initialCapacity, cap(q.nodes))
-	_, ok = q.Remove()
+	_, ok, err = q.Remove()
+	require.NoError(t, err)
 	require.False(t, ok)
 	require.Equal(t, initialCapacity, cap(q.nodes))
 }
 
 func TestQueueResizeToZero(t *testing.T) {
-	q := New[string](0)
+	q := New[string]()
 	require.Equal(t, 0, q.Len())
 	require.Equal(t, false, q.Closed())
 
@@ -70,7 +73,7 @@ func TestQueueLen(t *testing.T) {
 
 func TestQueueNew_Panics(t *testing.T) {
 	require.Panics(t, func() {
-		New[string](2, 4)
+		New[string](Config{}, Config{})
 	})
 }
 
@@ -90,15 +93,17 @@ func TestQueueWait(t *testing.T) {
 	q.Add("1", 0)
 	q.Add("2", 0)
 
-	ok := q.Wait()
-	require.Equal(t, true, ok)
-	s, ok := q.Remove()
+	err := q.Wait()
+	require.NoError(t, err)
+	s, ok, err := q.Remove()
+	require.NoError(t, err)
 	require.Equal(t, true, ok)
 	require.Equal(t, "1", s)
 
-	ok = q.Wait()
-	require.Equal(t, true, ok)
-	s, ok = q.Remove()
+	err = q.Wait()
+	require.NoError(t, err)
+	s, ok, err = q.Remove()
+	require.NoError(t, err)
 	require.Equal(t, true, ok)
 	require.Equal(t, "2", s)
 
@@ -106,9 +111,10 @@ func TestQueueWait(t *testing.T) {
 		q.Add("3", 0)
 	}()
 
-	ok = q.Wait()
-	require.Equal(t, true, ok)
-	s, ok = q.Remove()
+	err = q.Wait()
+	require.NoError(t, err)
+	s, ok, err = q.Remove()
+	require.NoError(t, err)
 	require.Equal(t, true, ok)
 	require.Equal(t, "3", s)
 }
@@ -117,7 +123,8 @@ func TestQueueClose(t *testing.T) {
 	q := New[[]byte]()
 
 	// test removing from empty queue
-	_, ok := q.Remove()
+	_, ok, err := q.Remove()
+	require.NoError(t, err)
 	require.Equal(t, false, ok)
 
 	i := []byte("1")
@@ -126,16 +133,16 @@ func TestQueueClose(t *testing.T) {
 	q.Add(i, 0)
 	q.Close()
 
-	ok = q.Add(i, 0)
-	require.Equal(t, false, ok)
+	err = q.Add(i, 0)
+	require.ErrorIs(t, err, ErrClosed)
 
-	ok = q.Wait()
-	require.Equal(t, false, ok)
+	err = q.Wait()
+	require.ErrorIs(t, err, ErrClosed)
 
-	_, ok = q.Remove()
-	require.Equal(t, false, ok)
+	_, _, err = q.Remove()
+	require.ErrorIs(t, err, ErrClosed)
 
-	require.Equal(t, true, q.Closed())
+	require.True(t, q.Closed())
 }
 
 func TestQueueCloseRemaining(t *testing.T) {
@@ -144,11 +151,21 @@ func TestQueueCloseRemaining(t *testing.T) {
 	q.Add("2", 0)
 	remaining := q.CloseRemaining()
 	require.Equal(t, 2, len(remaining))
-	ok := q.Add("3", 0)
-	require.Equal(t, false, ok)
-	require.Equal(t, true, q.Closed())
+	err := q.Add("3", 0)
+	require.ErrorIs(t, err, ErrClosed)
+	require.True(t, q.Closed())
 	remaining = q.CloseRemaining()
 	require.Equal(t, 0, len(remaining))
+}
+
+var testQueue *Queue[[]byte]
+
+func BenchmarkQueueNew(b *testing.B) {
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		testQueue = New[[]byte](Config{InitialCapacity: 2})
+	}
+	b.StopTimer()
 }
 
 func BenchmarkQueueAdd(b *testing.B) {
@@ -156,7 +173,7 @@ func BenchmarkQueueAdd(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		i := []byte("test")
-		q.Add(i, len(i))
+		_ = q.Add(i, len(i))
 	}
 	b.StopTimer()
 	q.Close()
@@ -168,9 +185,9 @@ func addAndConsume[T any](q *Queue[T], item T, cost int, n int) {
 	go func() {
 		count := 0
 		for {
-			ok := q.Wait()
-			if !ok {
-				continue
+			err := q.Wait()
+			if err != nil {
+				break
 			}
 			q.Remove()
 			count++
@@ -181,13 +198,13 @@ func addAndConsume[T any](q *Queue[T], item T, cost int, n int) {
 		}
 	}()
 	for i := 0; i < n; i++ {
-		q.Add(item, cost)
+		_ = q.Add(item, cost)
 	}
 	<-done
 }
 
 func BenchmarkQueueAddConsume(b *testing.B) {
-	q := New[[]byte]()
+	q := New[[]byte](Config{InitialCapacity: 1})
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		addAndConsume(q, []byte("test"), 4, 100)
@@ -200,7 +217,7 @@ func BenchmarkQueueAddConsume(b *testing.B) {
 func BenchmarkQueueCreateAddConsumeClose(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		q := New[[]byte](100)
+		q := New[[]byte](Config{InitialCapacity: 100})
 		addAndConsume(q, []byte("test"), 4, 100)
 		require.Equal(b, 0, q.Cost())
 		q.Close()
