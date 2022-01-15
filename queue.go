@@ -1,4 +1,4 @@
-// Package cute provides a generic unbounded queue for Go programming language.
+// Package cute provides a generic unbounded FIFO queue for Go programming language.
 package cute
 
 import (
@@ -6,7 +6,7 @@ import (
 	"sync"
 )
 
-// Queue is a generic unbounded queue of any T.
+// Queue is a generic unbounded FIFO queue of any T.
 // It can optionally maintain the total cost of currently queued elements.
 // All queue methods are goroutine-safe. When using cost be aware that integer overflow
 // is not handled here, supposing that the queue will be closed well below max int size.
