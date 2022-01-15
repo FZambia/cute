@@ -29,52 +29,35 @@ type queuedItem[T any] struct {
 	cost int
 }
 
-// DefaultInitialCapacity of the underlying slice to keep queued elements.
-const DefaultInitialCapacity = 1
-
-// Options for queue. Use functional options to modify queue behavior.
-type Options struct {
-	initialCapacity *int
-	maxCost         int
+// Config for queue. Can be optionally passed to New.
+type Config struct {
+	// InitialCapacity allows setting an initial capacity for the underlying slice
+	// to keep queued elements. Queue capacity then never goes down below the initial
+	// capacity even if there are no elements left in the Queue.
+	InitialCapacity int
+	// MaxCost allows setting maximum queue cost. If max cost is not set – then
+	// queue will grow infinitely (but still can be closed manually from the outside
+	// after checking Queue.Size).
+	MaxCost int
 }
 
-// Option is a type to represent various queue options.
-type Option func(*Options)
+// New returns a new Queue. The caller can optionally pass custom queue Config.
+func New[T any](config ...Config) *Queue[T] {
+	var maxCost int
+	var initCap int
 
-// WithInitialCapacity allows setting a capacity for the underlying slice to keep
-// queued elements (which is DefaultInitialCapacity by default). Queue capacity never
-//// goes down below the initial capacity.
-func WithInitialCapacity(capacity int) Option {
-	return func(opts *Options) {
-		opts.initialCapacity = &capacity
+	if len(config) >= 1 {
+		if len(config) > 1 {
+			panic("at most one Config can be passed to queue constructor")
+		}
+		maxCost = config[0].MaxCost
+		initCap = config[0].InitialCapacity
 	}
-}
 
-// WithMaxCost allows setting maximum queue cost. If max cost not set – then
-// queue will grow infinitely (but can be closed manually from the outside after)
-// checking Queue.Size().
-func WithMaxCost(maxCost int) Option {
-	return func(opts *Options) {
-		opts.maxCost = maxCost
-	}
-}
-
-// New returns a new Queue. The caller can optionally override initial capacity
-// of the queue (which is DefaultInitialCapacity by default). Queue capacity never
-// goes down below the initial capacity.
-func New[T any](opts ...Option) *Queue[T] {
-	o := &Options{}
-	for _, opt := range opts {
-		opt(o)
-	}
-	initCap := DefaultInitialCapacity
-	if o.initialCapacity != nil {
-		initCap = *o.initialCapacity
-	}
 	sq := &Queue[T]{
 		initCap: initCap,
 		nodes:   make([]queuedItem[T], initCap),
-		maxCost: o.maxCost,
+		maxCost: maxCost,
 	}
 	sq.cond = sync.NewCond(&sq.mu)
 	return sq
@@ -88,7 +71,7 @@ var (
 // Add a T to the back of the queue.
 // It will return ErrClosed if the queue is closed, in that case the T is dropped.
 // It will return ErrMaxCostExceeded if the queue max cost will be overflowed upon
-// adding new elem, in that case the T is dropped.
+// adding new elem, in that case the T is also dropped.
 func (q *Queue[T]) Add(elem T, cost int) error {
 	q.mu.Lock()
 	if q.closed {
