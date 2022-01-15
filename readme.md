@@ -1,5 +1,6 @@
 [![Build Status](https://github.com/FZambia/cute/workflows/build/badge.svg?branch=main)](https://github.com/FZambia/cute/actions)
 [![GoDoc](https://pkg.go.dev/badge/FZambia/cute)](https://pkg.go.dev/github.com/FZambia/cute)
+[![codecov.io](https://codecov.io/gh/FZambia/cute/branch/main/graphs/badge.svg)](https://codecov.io/github/FZambia/cute?branch=main)
 
 Package `cu[T]e` provides a generic unbounded FIFO queue for Go programming language.
 
