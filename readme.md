@@ -2,7 +2,7 @@
 [![GoDoc](https://pkg.go.dev/badge/FZambia/cute)](https://pkg.go.dev/github.com/FZambia/cute)
 [![codecov.io](https://codecov.io/gh/FZambia/cute/branch/main/graphs/badge.svg)](https://codecov.io/github/FZambia/cute?branch=main)
 
-Package `cu[T]e` provides a generic unbounded FIFO queue for Go programming language.
+Package `cu[T]e` provides a generic unbounded [FIFO](https://en.wikipedia.org/wiki/FIFO_(computing_and_electronics)) queue for Go programming language.
 
 This queue implementation additionally maintains the total cost of currently queued elements, so the queue can be bound to the cost of the elements.
 
