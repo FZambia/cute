@@ -13,18 +13,18 @@ import (
 type Queue[T any] struct {
 	mu      sync.RWMutex
 	cond    *sync.Cond
-	nodes   []queuedItem[T]
+	elems   []queuedElem[T]
 	head    int
 	tail    int
 	cnt     int
 	cost    int
 	maxCost int
-	closed  bool
 	initCap int
+	closed  bool
 }
 
 // Wrap T and keep its cost.
-type queuedItem[T any] struct {
+type queuedElem[T any] struct {
 	elem T
 	cost int
 }
@@ -56,7 +56,7 @@ func New[T any](config ...Config) *Queue[T] {
 
 	sq := &Queue[T]{
 		initCap: initCap,
-		nodes:   make([]queuedItem[T], initCap),
+		elems:   make([]queuedElem[T], initCap),
 		maxCost: maxCost,
 	}
 	sq.cond = sync.NewCond(&sq.mu)
@@ -86,7 +86,7 @@ func (q *Queue[T]) Add(elem T, cost int) error {
 		q.mu.Unlock()
 		return ErrMaxCostExceeded
 	}
-	if q.cnt == len(q.nodes) {
+	if q.cnt == len(q.elems) {
 		// Also tested a growth rate of 1.5, see: http://stackoverflow.com/questions/2269063/buffer-growth-strategy
 		// In Go this resulted in a higher memory usage.
 		n := q.cnt * 2
@@ -95,12 +95,12 @@ func (q *Queue[T]) Add(elem T, cost int) error {
 		}
 		q.resize(n)
 	}
-	i := queuedItem[T]{
+	i := queuedElem[T]{
 		elem: elem,
 		cost: cost,
 	}
-	q.nodes[q.tail] = i
-	q.tail = (q.tail + 1) % len(q.nodes)
+	q.elems[q.tail] = i
+	q.tail = (q.tail + 1) % len(q.elems)
 	q.cost += cost
 	q.cnt++
 	q.cond.Signal()
@@ -114,7 +114,7 @@ func (q *Queue[T]) Close() {
 	defer q.mu.Unlock()
 	q.closed = true
 	q.cnt = 0
-	q.nodes = nil
+	q.elems = nil
 	q.cost = 0
 	q.cond.Broadcast()
 }
@@ -129,14 +129,14 @@ func (q *Queue[T]) CloseRemaining() []T {
 	}
 	rem := make([]T, 0, q.cnt)
 	for q.cnt > 0 {
-		i := q.nodes[q.head]
-		q.head = (q.head + 1) % len(q.nodes)
+		i := q.elems[q.head]
+		q.head = (q.head + 1) % len(q.elems)
 		q.cnt--
 		rem = append(rem, i.elem)
 	}
 	q.closed = true
 	q.cnt = 0
-	q.nodes = nil
+	q.elems = nil
 	q.cost = 0
 	q.cond.Broadcast()
 	return rem
@@ -153,8 +153,8 @@ func (q *Queue[T]) Closed() bool {
 }
 
 // Wait for a message to be added.
-// If there are items on the queue will return immediately. Will return ErrClosed
-// if the queue is closed. Otherwise, returns nil.
+// If there are elems on the queue will return immediately, otherwise blocks.
+// Will return ErrClosed if the queue is closed. Otherwise, returns nil.
 func (q *Queue[T]) Wait() error {
 	q.mu.Lock()
 	if q.closed {
@@ -171,9 +171,8 @@ func (q *Queue[T]) Wait() error {
 }
 
 // Remove will remove a T from the queue.
-// If false is returned, it either means:
-// 1) there were no items on the queue, or
-// 2) the queue is closed.
+// If second return argument is false it means there were no elems in the queue.
+// Returns ErrClosed if the queue is closed.
 func (q *Queue[T]) Remove() (T, bool, error) {
 	q.mu.Lock()
 	if q.closed {
@@ -186,12 +185,12 @@ func (q *Queue[T]) Remove() (T, bool, error) {
 		var t T
 		return t, false, nil
 	}
-	i := q.nodes[q.head]
-	q.head = (q.head + 1) % len(q.nodes)
+	i := q.elems[q.head]
+	q.head = (q.head + 1) % len(q.elems)
 	q.cnt--
 	q.cost -= i.cost
 
-	if n := len(q.nodes) / 2; n >= q.initCap && q.cnt <= n {
+	if n := len(q.elems) / 2; n >= q.initCap && q.cnt <= n {
 		q.resize(n)
 	}
 
@@ -217,23 +216,23 @@ func (q *Queue[T]) Cost() int {
 
 // Write mutex must be held when calling.
 func (q *Queue[T]) resize(n int) {
-	nodes := make([]queuedItem[T], n)
+	nodes := make([]queuedElem[T], n)
 
 	if n == 0 {
 		q.tail = 0
 		q.head = 0
-		q.nodes = nodes
+		q.elems = nodes
 		return
 	}
 
 	if q.head < q.tail {
-		copy(nodes, q.nodes[q.head:q.tail])
+		copy(nodes, q.elems[q.head:q.tail])
 	} else {
-		copy(nodes, q.nodes[q.head:])
-		copy(nodes[len(q.nodes)-q.head:], q.nodes[:q.tail])
+		copy(nodes, q.elems[q.head:])
+		copy(nodes[len(q.elems)-q.head:], q.elems[:q.tail])
 	}
 
 	q.tail = q.cnt % n
 	q.head = 0
-	q.nodes = nodes
+	q.elems = nodes
 }

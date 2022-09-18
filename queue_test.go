@@ -15,36 +15,36 @@ func TestQueueResize(t *testing.T) {
 		_ = q.Add("1", 0)
 	}
 	_ = q.Add("resize here", 0)
-	require.Equal(t, initialCapacity*2, cap(q.nodes))
+	require.Equal(t, initialCapacity*2, cap(q.elems))
 	_, _, _ = q.Remove()
 	_ = q.Add("new resize here", 0)
-	require.Equal(t, initialCapacity*2, cap(q.nodes))
+	require.Equal(t, initialCapacity*2, cap(q.elems))
 	_ = q.Add("one more elem, no resize must happen", 0)
-	require.Equal(t, initialCapacity*2, cap(q.nodes))
+	require.Equal(t, initialCapacity*2, cap(q.elems))
 
 	_ = q.Add("one more elem, resize must happen", 0)
-	require.Equal(t, initialCapacity*4, cap(q.nodes))
+	require.Equal(t, initialCapacity*4, cap(q.elems))
 
 	_, _, _ = q.Remove()
-	require.Equal(t, initialCapacity*2, cap(q.nodes))
+	require.Equal(t, initialCapacity*2, cap(q.elems))
 	_, _, _ = q.Remove()
-	require.Equal(t, initialCapacity*2, cap(q.nodes))
+	require.Equal(t, initialCapacity*2, cap(q.elems))
 	_, ok, err := q.Remove()
 	require.NoError(t, err)
 	require.True(t, ok)
-	require.Equal(t, initialCapacity, cap(q.nodes))
+	require.Equal(t, initialCapacity, cap(q.elems))
 	_, ok, err = q.Remove()
 	require.NoError(t, err)
 	require.True(t, ok)
-	require.Equal(t, initialCapacity, cap(q.nodes))
+	require.Equal(t, initialCapacity, cap(q.elems))
 	_, ok, err = q.Remove()
 	require.NoError(t, err)
 	require.True(t, ok)
-	require.Equal(t, initialCapacity, cap(q.nodes))
+	require.Equal(t, initialCapacity, cap(q.elems))
 	_, ok, err = q.Remove()
 	require.NoError(t, err)
 	require.False(t, ok)
-	require.Equal(t, initialCapacity, cap(q.nodes))
+	require.Equal(t, initialCapacity, cap(q.elems))
 }
 
 func TestQueueResizeToZero(t *testing.T) {
@@ -53,11 +53,11 @@ func TestQueueResizeToZero(t *testing.T) {
 	require.Equal(t, false, q.Closed())
 
 	_ = q.Add("resize here", 0)
-	require.Equal(t, 1, cap(q.nodes))
+	require.Equal(t, 1, cap(q.elems))
 	_, _, _ = q.Remove()
-	require.Equal(t, 0, cap(q.nodes))
+	require.Equal(t, 0, cap(q.elems))
 	_ = q.Add("resize here", 0)
-	require.Equal(t, 1, cap(q.nodes))
+	require.Equal(t, 1, cap(q.elems))
 }
 
 func TestQueueLen(t *testing.T) {
@@ -172,8 +172,8 @@ func BenchmarkQueueAdd(b *testing.B) {
 	q := New[[]byte]()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		i := []byte("test")
-		_ = q.Add(i, len(i))
+		e := []byte("test")
+		_ = q.Add(e, len(e))
 	}
 	b.StopTimer()
 	q.Close()
