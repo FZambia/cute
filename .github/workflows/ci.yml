@@ -1,17 +1,21 @@
 name: build
 on: [push, pull_request]
 jobs:
-#  golangci:
-#    name: Lint
-#    runs-on: ubuntu-latest
-#    # Prevent duplicate builds on internal PRs.
-#    if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name != github.repository
-#    steps:
-#      - uses: actions/checkout@v2
-#      - name: golangci-lint
-#        uses: golangci/golangci-lint-action@v2
-#        with:
-#          version: v1.29
+  golangci:
+    name: Lint
+    runs-on: ubuntu-latest
+    # Prevent duplicate builds on internal PRs.
+    if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name != github.repository
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-go@v3
+        with:
+          go-version: '1.18.x'
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v3
+        with:
+          version: v1.45.2
+          args: --timeout 3m0s
   build:
     name: Test with Go ${{ matrix.go-version }}
     runs-on: ubuntu-latest
@@ -19,21 +23,12 @@ jobs:
     if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name != github.repository
     strategy:
       matrix:
-        go-version: ["tip"]
+        go-version: [1.18, 1.19]
     steps:
-#      - name: Install Go stable version
-#        uses: actions/setup-go@v2
-#        with:
-#          go-version: ${{ matrix.go-version }}
-
-      # https://github.com/actions/setup-go/issues/21
-      - name: Install gotip
-        run: |
-          git clone --depth=1 https://go.googlesource.com/go $HOME/gotip
-          cd $HOME/gotip/src
-          ./make.bash
-          echo "GOROOT=$HOME/gotip" >> $GITHUB_ENV
-          echo "$HOME/gotip/bin:$PATH" >> $GITHUB_PATH
+      - name: Install Go stable version
+        uses: actions/setup-go@v2
+        with:
+          go-version: ${{ matrix.go-version }}
 
       - name: Checkout code
         uses: actions/checkout@v2
